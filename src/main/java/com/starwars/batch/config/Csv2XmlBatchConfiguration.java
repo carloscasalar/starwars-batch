@@ -1,12 +1,11 @@
 package com.starwars.batch.config;
 
 import com.starwars.batch.domain.People;
-import com.starwars.batch.listener.BatchListener;
-import com.starwars.batch.listener.StepListener;
+import com.starwars.batch.listener.JobListener;
+import com.starwars.batch.listener.PeopleStepListener;
 import com.starwars.batch.processor.PeopleProcessor;
 import com.starwars.batch.repository.PeopleRepository;
 import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobExecutionListener;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
@@ -20,83 +19,136 @@ import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.batch.item.file.mapping.DefaultLineMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.batch.item.xml.StaxEventItemWriter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.oxm.jaxb.Jaxb2Marshaller;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-//@Configuration
-//@EnableBatchProcessing
-//@EnableScheduling
+@Configuration
+@EnableBatchProcessing
+@EnableScheduling
 public class Csv2XmlBatchConfiguration {
 
-  @Autowired
-  private PeopleRepository peopleRepository;
+    @Bean
+    public ItemReader<People> peopleReader() {
+        DelimitedLineTokenizer lineTokenizer = new DelimitedLineTokenizer();
+        lineTokenizer.setNames(new String[]{"name", "birthYear", "gender", "height", "mass", "eyeColor", "hairColor", "skinColor"});
 
-  @Autowired
-  private BatchListener listener;
+        BeanWrapperFieldSetMapper<People> fieldSetMapper = new BeanWrapperFieldSetMapper<>();
+        fieldSetMapper.setTargetType(People.class);
 
-  @Autowired
-  private StepListener stepListener;
+        DefaultLineMapper<People> lineMapper = new DefaultLineMapper<>();
+        lineMapper.setFieldSetMapper(fieldSetMapper);
+        lineMapper.setLineTokenizer(lineTokenizer);
 
-  @Bean
-  public ItemReader<People> peopleReader(){
-    FlatFileItemReader<People> itemReader = new FlatFileItemReader<>();
+        FlatFileItemReader<People> itemReader = new FlatFileItemReader<>();
+        itemReader.setResource(new FileSystemResource("src/main/resources/people.csv"));
+        itemReader.setLineMapper(lineMapper);
+        itemReader.setLinesToSkip(1);
 
-    itemReader.setResource(new FileSystemResource("src/main/resources/people.csv"));
+        return itemReader;
+    }
 
-    DelimitedLineTokenizer lineTokenizer = new DelimitedLineTokenizer();
-    lineTokenizer.setNames(new String[] {"name","birthYear","gender","height","mass","eyeColor","hairColor","skinColor"});
-    BeanWrapperFieldSetMapper<People> fieldSetMapper = new BeanWrapperFieldSetMapper<>();
-    fieldSetMapper.setTargetType(People.class);
+    @Bean
+    public ItemWriter<People> peopleWriter() {
+        StaxEventItemWriter<People> itemWriter = new StaxEventItemWriter<>();
+        itemWriter.setResource(new FileSystemResource("src/main/resources/people.xml"));
+        itemWriter.setRootTagName("peoples");
+        itemWriter.setOverwriteOutput(true);
 
-    DefaultLineMapper<People> lineMapper = new DefaultLineMapper<>();
-    lineMapper.setLineTokenizer(lineTokenizer);
-    lineMapper.setFieldSetMapper(fieldSetMapper);
+        Jaxb2Marshaller marshaller = new Jaxb2Marshaller();
+        marshaller.setClassesToBeBound(People.class);
 
-    itemReader.setLineMapper(lineMapper);
+        itemWriter.setMarshaller(marshaller);
 
-    return itemReader;
-  }
+        return itemWriter;
+    }
 
-  @Bean
-  public ItemWriter<People> getPeopleWriter(){
-    RepositoryItemWriter<People> itemWriter = new RepositoryItemWriter<>();
+    @Bean
+    public ItemWriter<People> peopleDBWriter(PeopleRepository peopleRepository) {
+        RepositoryItemWriter<People> itemWriter = new RepositoryItemWriter<>();
+        itemWriter.setRepository(peopleRepository);
+        itemWriter.setMethodName("save");
 
-    itemWriter.setRepository(peopleRepository);
-    itemWriter.setMethodName("save");
+        return itemWriter;
+    }
 
-    return itemWriter;
-  }
+    @Bean
+    public ItemProcessor peopleItemProcessor() {
+        return new PeopleProcessor();
+    }
 
-  @Bean
-  public ItemProcessor<People,People> getPeopleProcessor(){
-    return new PeopleProcessor();
-  }
+    @Bean
+    public Step csvStep(StepBuilderFactory stepBuilderFactory,
+                        ItemReader peopleReader,
+                        ItemProcessor peopleItemProcessor,
+                        ItemWriter peopleWriter) {
 
-  @Bean
-  public Step getCsvStep(StepBuilderFactory builderFactory,
-                         ItemReader peopleReader,
-                         ItemProcessor peopleProcessor,
-                         ItemWriter peopleWriter){
-    return builderFactory
-      .get("csvStep")
-      .chunk(10)
-      .listener(stepListener)
-      .reader(peopleReader)
-      .processor(peopleProcessor)
-      .writer(peopleWriter)
-      .build();
-  }
+        return stepBuilderFactory
+                .get("csvStep")
+                .chunk(10)
+                .reader(peopleReader)
+                .processor(peopleItemProcessor)
+                .writer(peopleWriter)
+                .build();
+    }
 
-  @Bean
-  public Job job(JobBuilderFactory jobBuilderFactory, Step csvStep){
-    return jobBuilderFactory
-      .get("job")
-      .incrementer(new RunIdIncrementer())
-      .listener(listener)
-      .start(csvStep)
-      .build();
-  }
+    @Bean
+    public Step dbStep(StepBuilderFactory stepBuilderFactory,
+                       ItemReader peopleReader,
+                       ItemProcessor peopleItemProcessor,
+                       ItemWriter peopleDBWriter,
+                       PeopleStepListener peopleStepListener) {
+
+        return stepBuilderFactory
+                .get("dbStep")
+                .chunk(10)
+                .listener(peopleStepListener)
+                .reader(peopleReader)
+                .processor(peopleItemProcessor)
+                .writer(peopleDBWriter)
+                .build();
+    }
+
+    @Bean
+    public Job csvJob(JobBuilderFactory jobBuilderFactory,
+                      Step csvStep) {
+
+        return jobBuilderFactory
+                .get("csvJob")
+                .incrementer(new RunIdIncrementer())
+                .start(csvStep)
+                .build();
+    }
+
+    @Bean
+    public Job dbJob(JobBuilderFactory jobBuilderFactory,
+                     Step dbStep,
+                     JobListener jobListener) {
+
+        return jobBuilderFactory
+                .get("dbJob")
+                .incrementer(new RunIdIncrementer())
+                .listener(jobListener)
+                .start(dbStep)
+                .build();
+    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

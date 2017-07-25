@@ -7,14 +7,14 @@ import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
-public class HellowWorldTasklet implements Tasklet{
+@Slf4j
+public class HelloWorldTasklet implements Tasklet {
 
-  @Override
-  public RepeatStatus execute(StepContribution stepContribution, ChunkContext chunkContext) throws Exception {
-    log.info("Hello World");
+    @Override
+    public RepeatStatus execute(StepContribution stepContribution, ChunkContext chunkContext) throws Exception {
+        log.info("Hello World");
 
-    return RepeatStatus.FINISHED;
-  }
+        return RepeatStatus.FINISHED;
+    }
 }

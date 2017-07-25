@@ -7,20 +7,24 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.xml.bind.annotation.XmlRootElement;
 
+@Entity
 @Data
 @XmlRootElement(name = "people")
-@Entity
-public class People {
-  @Id
-  @GeneratedValue
-  private String id;
+public class People implements Cloneable{
+    @Id
+    @GeneratedValue
+    private Long id;
+    private String name;
+    private String birthYear;
+    private String gender;
+    private String height;
+    private String mass;
+    private String eyeColor;
+    private String hairColor;
+    private String skinColor;
 
-  private String name;
-  private String birthYear;
-  private String gender;
-  private String height;
-  private String mass;
-  private String eyeColor;
-  private String hairColor;
-  private String skinColor;
+    @Override
+    public Object clone() throws CloneNotSupportedException {
+        return super.clone();
+    }
 }

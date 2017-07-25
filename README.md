@@ -1,4 +1,3 @@
-# starwars-batch
-Taller Spring Batch Star Wars
+# Sample Batch
 
-Día 4, práctica de Carlos Castillo.
+Simple project for learn spring batch.
