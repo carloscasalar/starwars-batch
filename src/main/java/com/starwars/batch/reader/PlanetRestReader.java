@@ -2,9 +2,6 @@ package com.starwars.batch.reader;
 
 import com.starwars.batch.domain.Planet;
 import org.springframework.batch.item.ItemReader;
-import org.springframework.batch.item.NonTransientResourceException;
-import org.springframework.batch.item.ParseException;
-import org.springframework.batch.item.UnexpectedInputException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
@@ -29,14 +26,14 @@ public class PlanetRestReader implements ItemReader<Planet> {
             planetList = fetchPlanetListFromAPI();
         }
 
-        Planet nextStudent = null;
+        Planet nextPlanet = null;
 
         if (nextPlanetIndex < planetList.size()) {
-            nextStudent = planetList.get(nextPlanetIndex);
+            nextPlanet = planetList.get(nextPlanetIndex);
             nextPlanetIndex++;
         }
 
-        return nextStudent;
+        return nextPlanet;
     }
 
     private boolean planetListIsNotInitialized() {
